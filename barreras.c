@@ -2,20 +2,18 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <time.h>
 
 int num_hilos;
-int tipo_barrera; // 1mutex, 2semaforo, 3cond_var
+int tipo_barrera; 
 
-// Variables para Barrera 1 (Mutex y Busy-wait)
 int counter_1 = 0;
 pthread_mutex_t barrier_mutex;
 
-// Variables para Barrera 2 (Semáforos)
 int counter_2 = 0;
 sem_t count_sem;
 sem_t barrier_sem;
 
-// Variables para Barrera 3 (Variables de condición)
 int counter_3 = 0;
 pthread_mutex_t mutex_cond;
 pthread_cond_t cond_var;
@@ -24,7 +22,7 @@ void barrera_mutex() {
     pthread_mutex_lock(&barrier_mutex);
     counter_1++;
     pthread_mutex_unlock(&barrier_mutex);
-    while (counter_1 < num_hilos); // Busy-wait
+    while (counter_1 < num_hilos); 
 }
 
 void barrera_semaforo() {
@@ -32,9 +30,7 @@ void barrera_semaforo() {
     if (counter_2 == num_hilos - 1) {
         counter_2 = 0;
         sem_post(&count_sem);
-        for (int j = 0; j < num_hilos - 1; j++) {
-            sem_post(&barrier_sem);
-        }
+        for (int j = 0; j < num_hilos - 1; j++) sem_post(&barrier_sem);
     } else {
         counter_2++;
         sem_post(&count_sem);
@@ -55,29 +51,16 @@ void barrera_cond_var() {
 }
 
 void* trabajo_hilo(void* arg) {
-    long id = (long)arg;
-    
-    printf("Hilo %ld llego a la barrera...\n", id);
-    
     if (tipo_barrera == 1) barrera_mutex();
     else if (tipo_barrera == 2) barrera_semaforo();
     else if (tipo_barrera == 3) barrera_cond_var();
-    
-    printf("Hilo %ld paso la barrera!\n", id);
     return NULL;
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        printf("Uso: ./barreras <num_hilos> <tipo_barrera>\n");
-        printf("Tipos: 1=Mutex, 2=Semaforo, 3=CondVar\n");
-        return 1;
-    }
-    
     num_hilos = atoi(argv[1]);
     tipo_barrera = atoi(argv[2]);
 
-    // Inicializar herramientas
     pthread_mutex_init(&barrier_mutex, NULL);
     sem_init(&count_sem, 0, 1);
     sem_init(&barrier_sem, 0, 0);
@@ -86,22 +69,26 @@ int main(int argc, char* argv[]) {
 
     pthread_t* hilos = malloc(num_hilos * sizeof(pthread_t));
 
+    struct timespec inicio, fin;
+    clock_gettime(CLOCK_MONOTONIC, &inicio);
+
     for (long i = 0; i < num_hilos; i++) {
         pthread_create(&hilos[i], NULL, trabajo_hilo, (void*)i);
     }
-
     for (int i = 0; i < num_hilos; i++) {
         pthread_join(hilos[i], NULL);
     }
 
-    // Destruir herramientas
+    clock_gettime(CLOCK_MONOTONIC, &fin);
+    double tiempo = (fin.tv_sec - inicio.tv_sec) + (fin.tv_nsec - inicio.tv_nsec) / 1e9;
+
+    printf("Barrera tipo %d con %d hilos -> Tiempo: %.6f segundos\n", tipo_barrera, num_hilos, tiempo);
+
     pthread_mutex_destroy(&barrier_mutex);
     sem_destroy(&count_sem);
     sem_destroy(&barrier_sem);
     pthread_mutex_destroy(&mutex_cond);
     pthread_cond_destroy(&cond_var);
-    
     free(hilos);
-    printf("Todos los hilos pasaron la barrera.\n");
     return 0;
 }
